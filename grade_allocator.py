@@ -152,6 +152,17 @@ def project_final_grade(rows: list[GradeRow], pending_average: float) -> float:
     return total
 
 
+def project_remaining_bounds(rows: list[GradeRow]) -> tuple[float, float]:
+    floor = 0.0
+    ceiling = 0.0
+    for row in rows:
+        earned_floor = 0.0 if row.earned_pct is None else row.earned_pct
+        earned_ceiling = 100.0 if row.earned_pct is None else row.earned_pct
+        floor += earned_floor * row.weight / 100.0
+        ceiling += earned_ceiling * row.weight / 100.0
+    return floor, ceiling
+
+
 def print_report(rows: list[GradeRow], targets: list[float], pending_average: float | None) -> list[dict[str, float | str]]:
     summary = build_summary(rows)
     scenarios = build_target_rows(rows, targets)
@@ -162,6 +173,9 @@ def print_report(rows: list[GradeRow], targets: list[float], pending_average: fl
     print(f"Remaining weight:          {summary['remaining_weight']:.2f}%")
     print(f"Locked course points:      {summary['locked_points']:.2f}")
     print(f"Average on graded work:    {summary['current_average_on_graded']:.2f}%")
+    floor, ceiling = project_remaining_bounds(rows)
+    print(f"Floor if remaining work goes badly: {floor:.2f}%")
+    print(f"Ceiling if remaining work is perfect: {ceiling:.2f}%")
     print()
 
     print("Remaining components:")
