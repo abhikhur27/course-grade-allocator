@@ -45,6 +45,12 @@ Project a likely finish:
 python grade_allocator.py --input sample_gradebook.csv --pending-average 88
 ```
 
+Lock in one known pending score and solve the rest around it:
+
+```bash
+python grade_allocator.py --input sample_gradebook.csv --known-score "Final Exam=91" --targets 93,90,87
+```
+
 Export the target table:
 
 ```bash
@@ -67,6 +73,7 @@ Average on graded work:    85.17%
 ```bash
 python -m py_compile grade_allocator.py
 python grade_allocator.py --input sample_gradebook.csv --pending-average 88
+python grade_allocator.py --input sample_gradebook.csv --known-score "Final Exam=91"
 ```
 
 ## Portfolio Positioning

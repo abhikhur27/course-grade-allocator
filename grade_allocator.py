@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
         type=float,
         help="Optional projected average to apply across all remaining weight.",
     )
+    parser.add_argument(
+        "--known-score",
+        action="append",
+        default=[],
+        help="Lock a score for one pending category using Category=Score. Repeat as needed.",
+    )
     parser.add_argument("--output", type=Path, help="Optional CSV path for the scenario table.")
     return parser.parse_args()
 
@@ -93,6 +99,43 @@ def parse_targets(raw: str) -> list[float]:
     if not targets:
         raise ValueError("Provide at least one target percentage.")
     return sorted(set(targets), reverse=True)
+
+
+def apply_known_scores(rows: list[GradeRow], raw_known_scores: list[str]) -> tuple[list[GradeRow], list[tuple[str, float]]]:
+    if not raw_known_scores:
+        return rows, []
+
+    normalized_map = {row.category.strip().casefold(): index for index, row in enumerate(rows)}
+    adjusted = [GradeRow(category=row.category, weight=row.weight, earned_pct=row.earned_pct) for row in rows]
+    applied: list[tuple[str, float]] = []
+
+    for token in raw_known_scores:
+        if "=" not in token:
+            raise ValueError(f"Invalid known-score '{token}'. Use Category=Score.")
+
+        raw_category, raw_score = token.split("=", 1)
+        category_key = raw_category.strip().casefold()
+        if not category_key:
+            raise ValueError(f"Invalid known-score '{token}'. Category cannot be empty.")
+        if category_key not in normalized_map:
+            raise ValueError(f"Unknown category in known-score: {raw_category.strip()}")
+
+        index = normalized_map[category_key]
+        row = adjusted[index]
+        if row.earned_pct is not None:
+            raise ValueError(f"Category '{row.category}' already has a graded score.")
+
+        try:
+            score = float(raw_score.strip())
+        except ValueError as exc:
+            raise ValueError(f"Invalid score in known-score '{token}'.") from exc
+        if not 0 <= score <= 100:
+            raise ValueError(f"known-score must stay between 0 and 100: {token}")
+
+        row.earned_pct = score
+        applied.append((row.category, score))
+
+    return adjusted, applied
 
 
 def build_summary(rows: list[GradeRow]) -> dict[str, float]:
@@ -163,7 +206,12 @@ def project_remaining_bounds(rows: list[GradeRow]) -> tuple[float, float]:
     return floor, ceiling
 
 
-def print_report(rows: list[GradeRow], targets: list[float], pending_average: float | None) -> list[dict[str, float | str]]:
+def print_report(
+    rows: list[GradeRow],
+    targets: list[float],
+    pending_average: float | None,
+    known_scores: list[tuple[str, float]],
+) -> list[dict[str, float | str]]:
     summary = build_summary(rows)
     scenarios = build_target_rows(rows, targets)
 
@@ -176,6 +224,10 @@ def print_report(rows: list[GradeRow], targets: list[float], pending_average: fl
     floor, ceiling = project_remaining_bounds(rows)
     print(f"Floor if remaining work goes badly: {floor:.2f}%")
     print(f"Ceiling if remaining work is perfect: {ceiling:.2f}%")
+    if known_scores:
+        print("Locked pending assumptions:")
+        for category, score in known_scores:
+            print(f"  {category:<20} {score:>6.2f}%")
     print()
 
     print("Remaining components:")
@@ -219,8 +271,9 @@ def write_output(path: Path, rows: list[dict[str, float | str]]) -> None:
 def main() -> None:
     args = parse_args()
     rows = load_grade_rows(args.input)
+    rows, known_scores = apply_known_scores(rows, args.known_score)
     targets = parse_targets(args.targets)
-    scenarios = print_report(rows, targets, args.pending_average)
+    scenarios = print_report(rows, targets, args.pending_average, known_scores)
 
     if args.output:
         write_output(args.output, scenarios)
