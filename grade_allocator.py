@@ -30,6 +30,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional projected average to apply across all remaining weight.",
     )
     parser.add_argument(
+        "--pending-grid",
+        type=str,
+        help="Optional comma-separated pending averages to compare as a what-if table.",
+    )
+    parser.add_argument(
         "--known-score",
         action="append",
         default=[],
@@ -99,6 +104,24 @@ def parse_targets(raw: str) -> list[float]:
     if not targets:
         raise ValueError("Provide at least one target percentage.")
     return sorted(set(targets), reverse=True)
+
+
+def parse_percentage_list(raw: str, label: str) -> list[float]:
+    values: list[float] = []
+    for token in raw.split(","):
+        stripped = token.strip()
+        if not stripped:
+            continue
+        try:
+            value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"Invalid {label}: {stripped}") from exc
+        if not 0 <= value <= 100:
+            raise ValueError(f"{label} must be between 0 and 100: {stripped}")
+        values.append(value)
+    if not values:
+        raise ValueError(f"Provide at least one {label}.")
+    return sorted(set(values))
 
 
 def apply_known_scores(rows: list[GradeRow], raw_known_scores: list[str]) -> tuple[list[GradeRow], list[tuple[str, float]]]:
@@ -206,10 +229,26 @@ def project_remaining_bounds(rows: list[GradeRow]) -> tuple[float, float]:
     return floor, ceiling
 
 
+def build_pending_grid(rows: list[GradeRow], pending_grid: list[float]) -> list[dict[str, float | str]]:
+    scenarios: list[dict[str, float | str]] = []
+    for pending_average in pending_grid:
+        projected = project_final_grade(rows, pending_average)
+        scenarios.append(
+            {
+                "pending_average": round(pending_average, 2),
+                "projected_final_grade": round(projected, 2),
+                "buffer_to_90": round(projected - 90.0, 2),
+                "buffer_to_80": round(projected - 80.0, 2),
+            }
+        )
+    return scenarios
+
+
 def print_report(
     rows: list[GradeRow],
     targets: list[float],
     pending_average: float | None,
+    pending_grid: list[float] | None,
     known_scores: list[tuple[str, float]],
 ) -> list[dict[str, float | str]]:
     summary = build_summary(rows)
@@ -254,6 +293,19 @@ def print_report(
         print()
         print(f"Projected final grade at {pending_average:.2f}% on remaining work: {projected:.2f}%")
 
+    if pending_grid:
+        projection_rows = build_pending_grid(rows, pending_grid)
+        print()
+        print(f"{'Pending Avg':<14} {'Projected Final':>18} {'Vs 90':>10} {'Vs 80':>10}")
+        print("-" * 56)
+        for row in projection_rows:
+            print(
+                f"{float(row['pending_average']):<14.2f} "
+                f"{float(row['projected_final_grade']):>18.2f}% "
+                f"{float(row['buffer_to_90']):>+9.2f} "
+                f"{float(row['buffer_to_80']):>+9.2f}"
+            )
+
     return scenarios
 
 
@@ -273,7 +325,8 @@ def main() -> None:
     rows = load_grade_rows(args.input)
     rows, known_scores = apply_known_scores(rows, args.known_score)
     targets = parse_targets(args.targets)
-    scenarios = print_report(rows, targets, args.pending_average, known_scores)
+    pending_grid = parse_percentage_list(args.pending_grid, "pending-grid value") if args.pending_grid else None
+    scenarios = print_report(rows, targets, args.pending_average, pending_grid, known_scores)
 
     if args.output:
         write_output(args.output, scenarios)

@@ -45,6 +45,12 @@ Project a likely finish:
 python grade_allocator.py --input sample_gradebook.csv --pending-average 88
 ```
 
+Compare several remaining-average what-if scenarios at once:
+
+```bash
+python grade_allocator.py --input sample_gradebook.csv --pending-grid 70,80,85,90,95
+```
+
 Lock in one known pending score and solve the rest around it:
 
 ```bash
@@ -74,6 +80,7 @@ Average on graded work:    85.17%
 python -m py_compile grade_allocator.py
 python grade_allocator.py --input sample_gradebook.csv --pending-average 88
 python grade_allocator.py --input sample_gradebook.csv --known-score "Final Exam=91"
+python grade_allocator.py --input sample_gradebook.csv --pending-grid 75,85,95
 ```
 
 ## Portfolio Positioning
