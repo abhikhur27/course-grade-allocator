@@ -41,6 +41,7 @@ def parse_args() -> argparse.Namespace:
         help="Lock a score for one pending category using Category=Score. Repeat as needed.",
     )
     parser.add_argument("--output", type=Path, help="Optional CSV path for the scenario table.")
+    parser.add_argument("--markdown-output", type=Path, help="Optional Markdown planning brief.")
     return parser.parse_args()
 
 
@@ -244,6 +245,78 @@ def build_pending_grid(rows: list[GradeRow], pending_grid: list[float]) -> list[
     return scenarios
 
 
+def write_markdown_output(
+    path: Path,
+    rows: list[GradeRow],
+    scenarios: list[dict[str, float | str]],
+    pending_average: float | None,
+    pending_grid: list[float] | None,
+    known_scores: list[tuple[str, float]],
+) -> None:
+    summary = build_summary(rows)
+    floor, ceiling = project_remaining_bounds(rows)
+    lines = [
+        "# Course Grade Plan",
+        "",
+        f"- Completed weight: `{summary['completed_weight']:.2f}%`",
+        f"- Remaining weight: `{summary['remaining_weight']:.2f}%`",
+        f"- Locked course points: `{summary['locked_points']:.2f}`",
+        f"- Average on graded work: `{summary['current_average_on_graded']:.2f}%`",
+        f"- Floor outcome: `{floor:.2f}%`",
+        f"- Ceiling outcome: `{ceiling:.2f}%`",
+        "",
+        "## Remaining components",
+    ]
+    remaining = [row for row in rows if row.earned_pct is None]
+    if remaining:
+        for row in remaining:
+            lines.append(f"- `{row.category}` | weight `{row.weight:.2f}%`")
+    else:
+        lines.append("- None")
+
+    if known_scores:
+        lines.extend(["", "## Locked assumptions"])
+        for category, score in known_scores:
+            lines.append(f"- `{category}` = `{score:.2f}%`")
+
+    lines.extend(["", "## Target table", "", "| Target | Need on remaining | Remaining weight | Verdict |", "| --- | ---: | ---: | --- |"])
+    for row in scenarios:
+        lines.append(
+            f"| {float(row['target_pct']):.2f}% | {float(row['required_avg_on_remaining']):.2f}% | "
+            f"{float(row['remaining_weight']):.2f}% | {row['verdict']} |"
+        )
+
+    if pending_average is not None:
+        projected = project_final_grade(rows, pending_average)
+        lines.extend(
+            [
+                "",
+                "## Single projection",
+                f"- If remaining work averages `{pending_average:.2f}%`, projected final grade is `{projected:.2f}%`.",
+            ]
+        )
+
+    if pending_grid:
+        projection_rows = build_pending_grid(rows, pending_grid)
+        lines.extend(
+            [
+                "",
+                "## Pending-average scenarios",
+                "",
+                "| Pending average | Projected final | Vs 90 | Vs 80 |",
+                "| --- | ---: | ---: | ---: |",
+            ]
+        )
+        for row in projection_rows:
+            lines.append(
+                f"| {float(row['pending_average']):.2f}% | {float(row['projected_final_grade']):.2f}% | "
+                f"{float(row['buffer_to_90']):+.2f} | {float(row['buffer_to_80']):+.2f} |"
+            )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def print_report(
     rows: list[GradeRow],
     targets: list[float],
@@ -331,6 +404,9 @@ def main() -> None:
     if args.output:
         write_output(args.output, scenarios)
         print(f"\nWrote scenario table: {args.output}")
+    if args.markdown_output:
+        write_markdown_output(args.markdown_output, rows, scenarios, args.pending_average, pending_grid, known_scores)
+        print(f"Wrote Markdown brief: {args.markdown_output}")
 
 
 if __name__ == "__main__":

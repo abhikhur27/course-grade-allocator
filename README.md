@@ -63,6 +63,12 @@ Export the target table:
 python grade_allocator.py --input sample_gradebook.csv --output reports/targets.csv
 ```
 
+Write a Markdown planning brief you can drop into notes:
+
+```bash
+python grade_allocator.py --input sample_gradebook.csv --pending-grid 75,85,95 --markdown-output reports/grade-plan.md
+```
+
 ## Sample output
 
 ```text
