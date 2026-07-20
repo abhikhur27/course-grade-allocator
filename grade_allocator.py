@@ -230,6 +230,20 @@ def project_remaining_bounds(rows: list[GradeRow]) -> tuple[float, float]:
     return floor, ceiling
 
 
+def build_remaining_leverage(rows: list[GradeRow]) -> list[dict[str, float | str]]:
+    leverage_rows = [
+        {
+            "category": row.category,
+            "weight": round(row.weight, 2),
+            "points_at_100": round(row.weight, 2),
+            "points_per_pct": round(row.weight / 100.0, 4),
+        }
+        for row in rows
+        if row.earned_pct is None
+    ]
+    return sorted(leverage_rows, key=lambda row: float(row["weight"]), reverse=True)
+
+
 def build_pending_grid(rows: list[GradeRow], pending_grid: list[float]) -> list[dict[str, float | str]]:
     scenarios: list[dict[str, float | str]] = []
     for pending_average in pending_grid:
@@ -255,6 +269,7 @@ def write_markdown_output(
 ) -> None:
     summary = build_summary(rows)
     floor, ceiling = project_remaining_bounds(rows)
+    leverage_rows = build_remaining_leverage(rows)
     lines = [
         "# Course Grade Plan",
         "",
@@ -273,6 +288,16 @@ def write_markdown_output(
             lines.append(f"- `{row.category}` | weight `{row.weight:.2f}%`")
     else:
         lines.append("- None")
+
+    lines.extend(["", "## Remaining leverage"])
+    if leverage_rows:
+        for row in leverage_rows:
+            lines.append(
+                f"- `{row['category']}` | weight `{float(row['weight']):.2f}%` | "
+                f"every +1% in this category adds `{float(row['points_per_pct']):.4f}` course points"
+            )
+    else:
+        lines.append("- No remaining categories.")
 
     if known_scores:
         lines.extend(["", "## Locked assumptions"])
@@ -349,6 +374,18 @@ def print_report(
     else:
         for row in remaining:
             print(f"  {row.category:<20} {row.weight:>6.2f}%")
+
+    leverage_rows = build_remaining_leverage(rows)
+    print()
+    print("Remaining leverage:")
+    if not leverage_rows:
+        print("  No remaining categories.")
+    else:
+        for row in leverage_rows:
+            print(
+                f"  {str(row['category']):<20} weight {float(row['weight']):>6.2f}% "
+                f"| +1% score -> +{float(row['points_per_pct']):.4f} course points"
+            )
 
     print()
     print(f"{'Target':<10} {'Need On Remaining':>20} {'Remaining Wt':>14} {'Verdict':>16}")

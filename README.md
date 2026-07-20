@@ -9,6 +9,7 @@ Syllabus math gets annoying when some categories are graded and others are still
 - What average do I need on the project + final to finish with an A?
 - Is my target still reachable?
 - If I average 88 on the remaining work, where do I land?
+- Which remaining category actually matters the most?
 
 ## Input format
 
@@ -79,6 +80,8 @@ Remaining weight:          40.00%
 Locked course points:      51.10
 Average on graded work:    85.17%
 ```
+
+The report now also prints a remaining-leverage section so you can see how much each unfinished category moves the final grade.
 
 ## Verification
 
